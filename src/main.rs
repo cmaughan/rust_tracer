@@ -1,4 +1,7 @@
+mod utils;
+
 use minifb::{Key, Window, WindowOptions};
+use utils::*;
 
 const WIDTH: usize = 500;
 const HEIGHT: usize = 500;
@@ -17,7 +20,7 @@ fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
     // Storage space
-    let buffer : Vec<u32> = vec![0; WIDTH * HEIGHT];
+    let buffer : Vec<PackedColor> = vec![0; WIDTH * HEIGHT];
 
     // Window loop
     while window.is_open() && !window.is_key_down(Key::Escape) {

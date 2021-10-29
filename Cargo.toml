@@ -7,4 +7,6 @@ edition = "2018"
 
 [dependencies]
 cargo-edit = "0.8.0"
+glam = "0.19.0"
 minifb = "0.19.3"
+rand_xoshiro = "0.6.0"
