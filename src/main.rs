@@ -26,3 +26,13 @@ fn main() {
             .unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_one() {
+        assert_eq!(0, 0);
+    }
+}
