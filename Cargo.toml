@@ -1,5 +1,5 @@
 [package]
-name = "one_day"
+name = "rust_tracer"
 version = "0.1.0"
 edition = "2018"
 
@@ -7,6 +7,10 @@ edition = "2018"
 
 [dependencies]
 cargo-edit = "0.8.0"
+crossbeam = "0.8.1"
+crossbeam-channel = "0.5.1"
 glam = "0.19.0"
 minifb = "0.19.3"
+num_cpus = "1.13.0"
 rand_xoshiro = "0.6.0"
+scoped_threadpool = "0.1.9"
