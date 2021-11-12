@@ -22,22 +22,51 @@ fn main() -> Result<(), Box<dyn Error>> {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
 
     // Storage space
-    let buffer : Vec<PackedColor> = vec![0xff00ffff; WIDTH * HEIGHT];
+    let mut buffer : Vec<PackedColor> = vec![0xff00ffff; WIDTH * HEIGHT];
 
     crossbeam::scope(|s| {
-        let worker = render::Renderer::new(window.get_size().0 as u32, window.get_size().1 as u32);
-        s.spawn(move |_| {
-            worker.render_frame();
-        });
+        let width = window.get_size().0 as u32;
+        let height = window.get_size().1 as u32;
+        let worker = Arc::new(render::Renderer::new(width, height));
         while window.is_open() && !window.is_key_down(Key::Escape) {
-            window
-                .update_with_buffer(&buffer, WIDTH, HEIGHT)
-                .unwrap();
+
+            let render_results = &worker.poll();
+            let has_changed = !render_results.is_empty();
+            for result in render_results {
+                for i in 0..result.pixels.len() {
+                    let color = result.pixels[i];
+                    let x = result.rect.x + (i as u32 % rect_width(&result.rect));
+                    let y = result.rect.y + (i as u32 / rect_width(&result.rect));
+                    let index = index_from_xy(width, height, x, y);
+                    buffer[index] = packed_color_from_color(color);
+                }
+            }
+
+            if worker.finished() {
+                let thread_worker = worker.clone();
+                s.spawn(move |_| {
+                    thread_worker.render_frame();
+                });
+            }
+
+            if has_changed {
+                window
+                    .update_with_buffer(&buffer, WIDTH, HEIGHT)
+                    .unwrap();
+            }
+            else {
+                window.update();
+
+            }
         }
+
+        worker.stop();
+
     }).unwrap();
 
     Ok(())
 }
+
 
 #[cfg(test)]
 mod tests {

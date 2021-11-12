@@ -1052,6 +1052,7 @@ dependencies = [
  "glam",
  "minifb",
  "num_cpus",
+ "rand",
  "rand_xoshiro",
  "scoped_threadpool",
 ]
