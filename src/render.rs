@@ -38,7 +38,7 @@ pub struct Renderer {
     receiver: crossbeam_channel::Receiver<ColorBlock>,
     stop: AtomicCell<bool>,
     finished: AtomicCell<bool>,
-    blocks: Vec<ColorBlock>
+    blocks: Vec<ColorBlock>,
 }
 
 impl Renderer {
@@ -52,7 +52,7 @@ impl Renderer {
             receiver: r,
             stop: AtomicCell::new(false),
             finished: AtomicCell::new(true),
-            blocks: Renderer::make_blocks::<Color>( width, height)
+            blocks: Renderer::make_blocks::<Color>( width, height),
         }
     }
 
@@ -70,11 +70,16 @@ impl Renderer {
     }
 
     pub fn render_frame(&self) {
-        let mut threadpool = Pool::new(num_cpus::get() as u32);
         self.finished.store(false);
+
+        let mut threadpool = Pool::new(num_cpus::get() as u32);
         threadpool.scoped(|scoped| {
+
+            // Walk each of the blocks we have decided to render
             for block in &self.blocks {
-                let mut new_block: ColorBlock = ColorBlock::new(&block.rect);
+
+                // Make a copy block
+                let mut new_block = ColorBlock::new(&block.rect);
                 scoped.execute(move || {
                     let mut rng = FastRepRand::new(rand::random());
                     if !self.stop.load() {
@@ -84,7 +89,8 @@ impl Renderer {
                         for y in 0..block_height {
                             for x in 0..block_width {
                                 let index: usize = (y * block_width + x) as usize;
-                                new_block.pixels[index] = color_random(&mut rng);
+                                new_block.pixels[index] = block.pixels[index] + color_random(&mut
+                                    rng);
                             };
                         };
 
@@ -98,15 +104,18 @@ impl Renderer {
             // Wait for all blocks to finish drawing
             scoped.join_all();
             self.finished.store(true);
+
         });
     }
 
     /// Returns fully rendered pixels in the channel
-    pub fn poll(&self) -> Vec<ColorBlock> {
+    pub fn poll(&mut self) -> Vec<ColorBlock> {
         let mut results = Vec::new();
         while !self.receiver.is_empty() {
             let res = self.receiver.recv().unwrap();
             results.push(res);
+
+            self.blocks[0].pixels[0] = Color::new( 0.0, 0.0,0.0);
         }
         results
     }
