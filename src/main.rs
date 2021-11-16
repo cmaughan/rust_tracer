@@ -33,10 +33,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let render_results = &worker.poll();
             let has_changed = !render_results.is_empty();
             for result in render_results {
-                for i in 0..result.pixels.len() {
-                    let color = result.pixels[i];
-                    let x = result.rect.x + (i as u32 % rect_width(&result.rect));
-                    let y = result.rect.y + (i as u32 / rect_width(&result.rect));
+                let block = result.lock().unwrap();
+                for i in 0..block.pixels.len() {
+                    let color = block.pixels[i];
+                    let x = block.rect.x + (i as u32 % rect_width(&block.rect));
+                    let y = block.rect.y + (i as u32 / rect_width(&block.rect));
                     let index = index_from_xy(width, height, x, y);
                     buffer[index] = packed_color_from_color(color);
                 }

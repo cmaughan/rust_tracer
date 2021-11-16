@@ -1,23 +1,39 @@
 use scoped_threadpool::Pool;
 use crossbeam::atomic::AtomicCell;
 use crossbeam_channel::bounded;
+use std::sync::Mutex;
 
 use crate::utils::*;
 
 const BLOCK_WIDTH: usize = 32;
 const BLOCK_HEIGHT: usize = 32;
 
+/*
+// Create a vector of data structures, which will be modified by threads
+let n = 50;
+let mut entries = Vec::new();
+for _ in 0..n {
+entries.push(Data { val: 0 });
+}
+
+entries.par_iter_mut().for_each(|d| d.val += 1);
+
+// Work on the data after threads are finished
+let total: u32 = entries.iter().fold(0, |acc
+*/
 /// A Block of pixels filled by the renderer.
 /// Typed because the rendering is at float precision, and the packed colors are returned
 #[derive(Clone)]
-pub struct Block<T> {
+pub struct Block {
     pub rect: Rect,
-    pub pixels: Vec<T>,
+    pub pixels: Vec<Color>,
     pub iteration: u64
 }
 
+type ColorBlock = Arc<Mutex<Block>>;
+
 /// Allocate a new block for a given rectangle, initializing the pixels to a default value
-impl<T> Block<T> where T : Clone + Default {
+impl Block {
     pub fn new(rect: &Rect) -> Self {
         Self {
             rect: *rect,
@@ -26,12 +42,6 @@ impl<T> Block<T> where T : Clone + Default {
         }
     }
 }
-
-// A high precision block
-pub type ColorBlock = Block<Color>;
-
-// An output color block
-//pub type OutputBlock = Block<PackedColor>;
 
 pub struct Renderer {
     sender: crossbeam_channel::Sender<ColorBlock>,
@@ -52,21 +62,35 @@ impl Renderer {
             receiver: r,
             stop: AtomicCell::new(false),
             finished: AtomicCell::new(true),
-            blocks: Renderer::make_blocks::<Color>( width, height),
+            blocks: Renderer::make_blocks( width, height),
         }
     }
 
     /// Make an array of blocks inside this larger window.
-    fn make_blocks<T>(width: u32, height: u32) -> Vec<Block<T>>
-        where T: Clone + Default {
-        let mut blocks: Vec<Block<T>> = Vec::new();
+    fn make_blocks(width: u32, height: u32) -> Vec<ColorBlock> {
+        let mut blocks = Vec::new();
         for y in (0..height).step_by(BLOCK_HEIGHT as usize) {
             for x in (0..width).step_by(BLOCK_WIDTH as usize) {
-                blocks.push(Block::<T>::new(&Rect::new(x, y, std::cmp::min(x + BLOCK_WIDTH as
-                    u32, width), std::cmp::min(y + BLOCK_HEIGHT as u32, height))));
+                blocks.push(Arc::new(Mutex::new(Block::new(&Rect::new(x, y, std::cmp::min(x +
+                                                                                              BLOCK_WIDTH as
+                                                                                                  u32, width), std::cmp::min(y + BLOCK_HEIGHT as u32, height))))));
             };
         };
         blocks
+    }
+
+    pub fn render_block(&self, block : &mut Block) {
+        let mut rng = FastRepRand::new(rand::random());
+        let block_width = rect_width(&block.rect);
+        let block_height = rect_height(&block.rect);
+
+        for y in 0..block_height {
+            for x in 0..block_width {
+                let index: usize = (y * block_width + x) as usize;
+                block.pixels[index] = color_random(&mut
+                    rng);
+            };
+        };
     }
 
     pub fn render_frame(&self) {
@@ -75,47 +99,29 @@ impl Renderer {
         let mut threadpool = Pool::new(num_cpus::get() as u32);
         threadpool.scoped(|scoped| {
 
-            // Walk each of the blocks we have decided to render
-            for block in &self.blocks {
+            if !self.stop.load() {
+                for b in &self.blocks {
 
-                // Make a copy block
-                let mut new_block = ColorBlock::new(&block.rect);
-                scoped.execute(move || {
-                    let mut rng = FastRepRand::new(rand::random());
-                    if !self.stop.load() {
-                        let block_width = rect_width(&block.rect);
-                        let block_height = rect_height(&block.rect);
+                    // Run a thread to render this block
+                    scoped.execute(move || {
 
-                        for y in 0..block_height {
-                            for x in 0..block_width {
-                                let index: usize = (y * block_width + x) as usize;
-                                new_block.pixels[index] = block.pixels[index] + color_random(&mut
-                                    rng);
-                            };
-                        };
+                        // Lock and render the block
+                        self.render_block(&mut b.lock().unwrap());
+                        self.sender.send(b.clone()).unwrap();
 
-                        // Now we have finished the block, send it.
-                        if !self.stop.load() {
-                            self.sender.send(new_block).unwrap();
-                        }
-                    }
-                });
+                    });
+                }
             }
-            // Wait for all blocks to finish drawing
-            scoped.join_all();
             self.finished.store(true);
-
         });
     }
 
-    /// Returns fully rendered pixels in the channel
-    pub fn poll(&mut self) -> Vec<ColorBlock> {
+    /// Returns fully rendered pixel blocks
+    pub fn poll(&self) -> Vec<ColorBlock> {
         let mut results = Vec::new();
         while !self.receiver.is_empty() {
             let res = self.receiver.recv().unwrap();
             results.push(res);
-
-            self.blocks[0].pixels[0] = Color::new( 0.0, 0.0,0.0);
         }
         results
     }
