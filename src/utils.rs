@@ -11,6 +11,10 @@ pub use rand::Rng;
 pub use rand_xoshiro::rand_core::SeedableRng;
 pub use rand_xoshiro::Xoshiro128Plus;
 
+pub use crossbeam::atomic::AtomicCell;
+pub use crossbeam_channel::bounded;
+pub use std::sync::Mutex;
+
 pub struct FastRepRand {
     rng: Xoshiro128Plus,
 }
